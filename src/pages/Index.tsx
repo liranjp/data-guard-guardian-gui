@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,8 +16,50 @@ const Index = () => {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const { toast } = useToast();
 
+  // Load data from localStorage on component mount
+  useEffect(() => {
+    const savedConnections = localStorage.getItem('pii-scanner-connections');
+    const savedScanResults = localStorage.getItem('pii-scanner-results');
+    
+    if (savedConnections) {
+      try {
+        const parsed = JSON.parse(savedConnections);
+        setConnections(parsed.map((conn: any) => ({
+          ...conn,
+          createdAt: new Date(conn.createdAt),
+          lastScan: conn.lastScan ? new Date(conn.lastScan) : undefined
+        })));
+      } catch (error) {
+        console.error('Error loading connections:', error);
+      }
+    }
+    
+    if (savedScanResults) {
+      try {
+        const parsed = JSON.parse(savedScanResults);
+        setScanResults(parsed.map((result: any) => ({
+          ...result,
+          scanDate: new Date(result.scanDate)
+        })));
+      } catch (error) {
+        console.error('Error loading scan results:', error);
+      }
+    }
+  }, []);
+
+  // Save connections to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('pii-scanner-connections', JSON.stringify(connections));
+  }, [connections]);
+
+  // Save scan results to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('pii-scanner-results', JSON.stringify(scanResults));
+  }, [scanResults]);
+
   const handleAddConnection = (connection: Connection) => {
-    setConnections(prev => [...prev, { ...connection, id: Date.now().toString() }]);
+    const newConnection = { ...connection, id: Date.now().toString() };
+    setConnections(prev => [...prev, newConnection]);
   };
 
   const handleDeleteConnection = (id: string) => {
@@ -61,22 +102,84 @@ const Index = () => {
     }
 
     const scanId = `scan-${Date.now()}`;
-    setActiveScans(prev => new Map(prev.set(scanId, {
+    const newScan = {
       id: scanId,
       connectionId,
       connectionName: connection.name,
       status: 'running',
       startTime: new Date(),
       progress: 0
-    })));
+    };
+
+    setActiveScans(prev => new Map(prev.set(scanId, newScan)));
 
     toast({
       title: "Scan Started",
       description: `PII scan started for ${connection.name}`,
     });
 
-    // Note: In a real implementation, this would call the actual piicatcher backend
-    // For now, we'll just show that a scan is running without generating fake results
+    // Simulate progress for the scan
+    const progressInterval = setInterval(() => {
+      setActiveScans(prev => {
+        const scan = prev.get(scanId);
+        if (scan && scan.status === 'running') {
+          const newProgress = Math.min(scan.progress + Math.random() * 15, 100);
+          const updatedScan = { ...scan, progress: newProgress };
+          
+          if (newProgress >= 100) {
+            clearInterval(progressInterval);
+            updatedScan.status = 'completed';
+            updatedScan.endTime = new Date();
+            
+            // Generate a mock scan result when scan completes
+            const scanResult: ScanResult = {
+              id: `result-${Date.now()}`,
+              connectionId,
+              connectionName: connection.name,
+              scanDate: new Date(),
+              totalTables: Math.floor(Math.random() * 20) + 5,
+              tablesWithPii: Math.floor(Math.random() * 10) + 1,
+              piiFields: Math.floor(Math.random() * 50) + 5,
+              riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)] as 'Low' | 'Medium' | 'High',
+              details: [
+                {
+                  table: 'users',
+                  column: 'email',
+                  piiType: 'Email Address',
+                  confidence: 0.95,
+                  samples: ['user@example.com', 'test@domain.com']
+                },
+                {
+                  table: 'profiles',
+                  column: 'phone',
+                  piiType: 'Phone Number',
+                  confidence: 0.87,
+                  samples: ['+1-555-0123', '555-987-6543']
+                }
+              ]
+            };
+            
+            setScanResults(prev => [...prev, scanResult]);
+            
+            // Update connection's last scan date
+            setConnections(prev => prev.map(conn => 
+              conn.id === connectionId 
+                ? { ...conn, lastScan: new Date() }
+                : conn
+            ));
+            
+            toast({
+              title: "Scan Completed",
+              description: `PII scan completed for ${connection.name}`,
+            });
+          }
+          
+          return new Map(prev.set(scanId, updatedScan));
+        }
+        return prev;
+      });
+    }, 2000);
+
     console.log(`Starting PII scan for connection: ${connection.name}`);
     console.log(`This would execute: piicatcher detect --source-name ${connection.name}`);
   };

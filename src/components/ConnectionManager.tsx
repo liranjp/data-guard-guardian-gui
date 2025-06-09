@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,13 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Plus, Database, Play, Calendar, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Connection, DatabaseType } from "@/types/piiscanner";
 import { useToast } from "@/hooks/use-toast";
-
-interface ConnectionManagerProps {
-  connections: Connection[];
-  onAddConnection: (connection: Connection) => void;
-  onDeleteConnection: (id: string) => void;
-  onStartScan: (connectionId: string) => void;
-}
+import { testDatabaseConnection, ConnectionTestResult } from "@/utils/connectionTester";
 
 const databaseConfigs = {
   postgresql: { label: 'PostgreSQL', defaultPort: 5432, color: 'bg-blue-500' },
@@ -28,6 +21,13 @@ const databaseConfigs = {
   bigquery: { label: 'BigQuery', defaultPort: 0, color: 'bg-red-500' },
 };
 
+interface ConnectionManagerProps {
+  connections: Connection[];
+  onAddConnection: (connection: Connection) => void;
+  onDeleteConnection: (id: string) => void;
+  onStartScan: (connectionId: string) => void;
+}
+
 const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   connections,
   onAddConnection,
@@ -36,7 +36,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     type: '' as DatabaseType,
@@ -62,38 +62,48 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     setTestResult(null);
 
     try {
-      // Simulate connection testing - in real implementation, this would call your backend
+      const port = formData.port ? parseInt(formData.port) : databaseConfigs[formData.type].defaultPort;
+      
       console.log('Testing connection with:', {
         type: formData.type,
         host: formData.host,
-        port: formData.port || databaseConfigs[formData.type].defaultPort,
+        port,
         database: formData.database,
         username: formData.username
       });
 
-      // Simulate async operation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await testDatabaseConnection(
+        formData.type,
+        formData.host,
+        port,
+        formData.database,
+        formData.username,
+        formData.password
+      );
 
-      // For demo purposes, we'll simulate different outcomes based on host
-      if (formData.host === 'localhost' || formData.host === '127.0.0.1') {
-        setTestResult({ success: true, message: 'Connection successful!' });
+      setTestResult(result);
+
+      if (result.success) {
         toast({
           title: "Connection Test Successful",
-          description: "Database connection is working properly",
+          description: result.message,
         });
       } else {
-        setTestResult({ success: false, message: 'Connection failed: Unable to reach host' });
         toast({
           title: "Connection Test Failed",
-          description: "Please check your connection details",
+          description: result.message,
           variant: "destructive"
         });
       }
     } catch (error) {
-      setTestResult({ success: false, message: 'Connection failed: Network error' });
+      const failureResult = { 
+        success: false, 
+        message: 'Connection failed: Network error' 
+      };
+      setTestResult(failureResult);
       toast({
         title: "Connection Test Failed",
-        description: "Network error occurred",
+        description: failureResult.message,
         variant: "destructive"
       });
     } finally {
