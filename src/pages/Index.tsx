@@ -9,11 +9,13 @@ import ConnectionManager from "@/components/ConnectionManager";
 import ScanManager from "@/components/ScanManager";
 import ReportViewer from "@/components/ReportViewer";
 import { Connection, ScanResult } from "@/types/piiscanner";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [activeScans, setActiveScans] = useState<Map<string, any>>(new Map());
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const { toast } = useToast();
 
   const handleAddConnection = (connection: Connection) => {
     setConnections(prev => [...prev, { ...connection, id: Date.now().toString() }]);
@@ -21,61 +23,74 @@ const Index = () => {
 
   const handleDeleteConnection = (id: string) => {
     setConnections(prev => prev.filter(conn => conn.id !== id));
+    // Also remove any active scans for this connection
+    setActiveScans(prev => {
+      const newScans = new Map(prev);
+      for (const [scanId, scan] of newScans) {
+        if (scan.connectionId === id) {
+          newScans.delete(scanId);
+        }
+      }
+      return newScans;
+    });
   };
 
   const handleStartScan = (connectionId: string) => {
     const connection = connections.find(c => c.id === connectionId);
-    if (connection) {
-      const scanId = `scan-${Date.now()}`;
-      setActiveScans(prev => new Map(prev.set(scanId, {
-        id: scanId,
-        connectionId,
-        connectionName: connection.name,
-        status: 'running',
-        startTime: new Date(),
-        progress: 0
-      })));
-
-      // Simulate scan progress
-      const interval = setInterval(() => {
-        setActiveScans(prev => {
-          const scan = prev.get(scanId);
-          if (scan && scan.progress < 100) {
-            const newProgress = Math.min(scan.progress + Math.random() * 15, 100);
-            const updatedScan = { ...scan, progress: newProgress };
-            
-            if (newProgress >= 100) {
-              updatedScan.status = 'completed';
-              updatedScan.endTime = new Date();
-              
-              // Add mock scan result
-              setScanResults(prevResults => [...prevResults, {
-                id: scanId,
-                connectionId,
-                connectionName: connection.name,
-                scanDate: new Date(),
-                totalTables: Math.floor(Math.random() * 50) + 10,
-                tablesWithPii: Math.floor(Math.random() * 20) + 5,
-                piiFields: Math.floor(Math.random() * 100) + 20,
-                riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)] as 'Low' | 'Medium' | 'High'
-              }]);
-              
-              clearInterval(interval);
-            }
-            
-            return new Map(prev.set(scanId, updatedScan));
-          }
-          return prev;
-        });
-      }, 1000);
+    if (!connection) {
+      toast({
+        title: "Error",
+        description: "Connection not found",
+        variant: "destructive"
+      });
+      return;
     }
+
+    // Check if there's already an active scan for this connection
+    const existingActiveScan = Array.from(activeScans.values()).find(
+      scan => scan.connectionId === connectionId && scan.status === 'running'
+    );
+
+    if (existingActiveScan) {
+      toast({
+        title: "Scan Already Running",
+        description: "A scan is already running for this connection",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const scanId = `scan-${Date.now()}`;
+    setActiveScans(prev => new Map(prev.set(scanId, {
+      id: scanId,
+      connectionId,
+      connectionName: connection.name,
+      status: 'running',
+      startTime: new Date(),
+      progress: 0
+    })));
+
+    toast({
+      title: "Scan Started",
+      description: `PII scan started for ${connection.name}`,
+    });
+
+    // Note: In a real implementation, this would call the actual piicatcher backend
+    // For now, we'll just show that a scan is running without generating fake results
+    console.log(`Starting PII scan for connection: ${connection.name}`);
+    console.log(`This would execute: piicatcher detect --source-name ${connection.name}`);
   };
 
   const handlePauseScan = (scanId: string) => {
     setActiveScans(prev => {
       const scan = prev.get(scanId);
       if (scan) {
-        return new Map(prev.set(scanId, { ...scan, status: 'paused' }));
+        const updatedScan = { ...scan, status: 'paused' };
+        toast({
+          title: "Scan Paused",
+          description: `Scan for ${scan.connectionName} has been paused`,
+        });
+        return new Map(prev.set(scanId, updatedScan));
       }
       return prev;
     });

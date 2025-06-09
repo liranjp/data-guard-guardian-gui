@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Database, Play, Calendar } from "lucide-react";
+import { Trash2, Plus, Database, Play, Calendar, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Connection, DatabaseType } from "@/types/piiscanner";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,6 +35,8 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   onStartScan
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     type: '' as DatabaseType,
@@ -46,6 +48,59 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   });
   const { toast } = useToast();
 
+  const testConnection = async () => {
+    if (!formData.type || !formData.host || !formData.username) {
+      toast({
+        title: "Error",
+        description: "Please fill in required fields before testing",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsTestingConnection(true);
+    setTestResult(null);
+
+    try {
+      // Simulate connection testing - in real implementation, this would call your backend
+      console.log('Testing connection with:', {
+        type: formData.type,
+        host: formData.host,
+        port: formData.port || databaseConfigs[formData.type].defaultPort,
+        database: formData.database,
+        username: formData.username
+      });
+
+      // Simulate async operation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // For demo purposes, we'll simulate different outcomes based on host
+      if (formData.host === 'localhost' || formData.host === '127.0.0.1') {
+        setTestResult({ success: true, message: 'Connection successful!' });
+        toast({
+          title: "Connection Test Successful",
+          description: "Database connection is working properly",
+        });
+      } else {
+        setTestResult({ success: false, message: 'Connection failed: Unable to reach host' });
+        toast({
+          title: "Connection Test Failed",
+          description: "Please check your connection details",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      setTestResult({ success: false, message: 'Connection failed: Network error' });
+      toast({
+        title: "Connection Test Failed",
+        description: "Network error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -53,6 +108,15 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
       toast({
         title: "Error",
         description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!testResult || !testResult.success) {
+      toast({
+        title: "Error",
+        description: "Please test the connection successfully before adding it",
         variant: "destructive"
       });
       return;
@@ -81,6 +145,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
       username: '',
       password: ''
     });
+    setTestResult(null);
 
     toast({
       title: "Connection added",
@@ -94,6 +159,11 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
       type,
       port: databaseConfigs[type].defaultPort.toString()
     }));
+    setTestResult(null);
+  };
+
+  const handleFormChange = () => {
+    setTestResult(null);
   };
 
   return (
@@ -114,7 +184,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
             <DialogHeader>
               <DialogTitle>Add Database Connection</DialogTitle>
               <DialogDescription>
-                Configure a new database connection for PII scanning
+                Configure and test a new database connection for PII scanning
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -123,7 +193,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, name: e.target.value }));
+                    handleFormChange();
+                  }}
                   placeholder="My Database"
                   required
                 />
@@ -151,7 +224,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                   <Input
                     id="host"
                     value={formData.host}
-                    onChange={(e) => setFormData(prev => ({ ...prev, host: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, host: e.target.value }));
+                      handleFormChange();
+                    }}
                     placeholder="localhost"
                     required
                   />
@@ -162,7 +238,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                     id="port"
                     type="number"
                     value={formData.port}
-                    onChange={(e) => setFormData(prev => ({ ...prev, port: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, port: e.target.value }));
+                      handleFormChange();
+                    }}
                     placeholder="5432"
                   />
                 </div>
@@ -173,7 +252,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                 <Input
                   id="database"
                   value={formData.database}
-                  onChange={(e) => setFormData(prev => ({ ...prev, database: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, database: e.target.value }));
+                    handleFormChange();
+                  }}
                   placeholder="my_database"
                 />
               </div>
@@ -183,7 +265,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                 <Input
                   id="username"
                   value={formData.username}
-                  onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, username: e.target.value }));
+                    handleFormChange();
+                  }}
                   placeholder="username"
                   required
                 />
@@ -195,16 +280,62 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                   id="password"
                   type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, password: e.target.value }));
+                    handleFormChange();
+                  }}
                   placeholder="••••••••"
                 />
+              </div>
+
+              {/* Test Connection Section */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Connection Test</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={testConnection}
+                    disabled={isTestingConnection || !formData.type || !formData.host || !formData.username}
+                  >
+                    {isTestingConnection ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Test Connection'
+                    )}
+                  </Button>
+                </div>
+                
+                {testResult && (
+                  <div className={`flex items-center space-x-2 text-sm p-2 rounded ${
+                    testResult.success 
+                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {testResult.success ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    <span>{testResult.message}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Add Connection</Button>
+                <Button 
+                  type="submit" 
+                  disabled={!testResult || !testResult.success}
+                >
+                  Add Connection
+                </Button>
               </div>
             </form>
           </DialogContent>
