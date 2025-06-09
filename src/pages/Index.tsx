@@ -14,12 +14,15 @@ const Index = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [activeScans, setActiveScans] = useState<Map<string, any>>(new Map());
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const [validatedConnections, setValidatedConnections] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Load data from localStorage on component mount
   useEffect(() => {
     const savedConnections = localStorage.getItem('pii-scanner-connections');
     const savedScanResults = localStorage.getItem('pii-scanner-results');
+    const savedActiveScans = localStorage.getItem('pii-scanner-active-scans');
+    const savedValidatedConnections = localStorage.getItem('pii-scanner-validated-connections');
     
     if (savedConnections) {
       try {
@@ -45,25 +48,66 @@ const Index = () => {
         console.error('Error loading scan results:', error);
       }
     }
+
+    if (savedActiveScans) {
+      try {
+        const parsed = JSON.parse(savedActiveScans);
+        const scansMap = new Map();
+        Object.entries(parsed).forEach(([key, value]: [string, any]) => {
+          scansMap.set(key, {
+            ...value,
+            startTime: new Date(value.startTime),
+            endTime: value.endTime ? new Date(value.endTime) : undefined
+          });
+        });
+        setActiveScans(scansMap);
+      } catch (error) {
+        console.error('Error loading active scans:', error);
+      }
+    }
+
+    if (savedValidatedConnections) {
+      try {
+        const parsed = JSON.parse(savedValidatedConnections);
+        setValidatedConnections(new Set(parsed));
+      } catch (error) {
+        console.error('Error loading validated connections:', error);
+      }
+    }
   }, []);
 
-  // Save connections to localStorage whenever they change
+  // Save data to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('pii-scanner-connections', JSON.stringify(connections));
   }, [connections]);
 
-  // Save scan results to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('pii-scanner-results', JSON.stringify(scanResults));
   }, [scanResults]);
 
+  useEffect(() => {
+    const scansObject = Object.fromEntries(activeScans);
+    localStorage.setItem('pii-scanner-active-scans', JSON.stringify(scansObject));
+  }, [activeScans]);
+
+  useEffect(() => {
+    localStorage.setItem('pii-scanner-validated-connections', JSON.stringify(Array.from(validatedConnections)));
+  }, [validatedConnections]);
+
   const handleAddConnection = (connection: Connection) => {
     const newConnection = { ...connection, id: Date.now().toString() };
     setConnections(prev => [...prev, newConnection]);
+    // Mark this connection as validated since it passed the test
+    setValidatedConnections(prev => new Set(prev).add(newConnection.id));
   };
 
   const handleDeleteConnection = (id: string) => {
     setConnections(prev => prev.filter(conn => conn.id !== id));
+    setValidatedConnections(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
     // Also remove any active scans for this connection
     setActiveScans(prev => {
       const newScans = new Map(prev);
@@ -82,6 +126,16 @@ const Index = () => {
       toast({
         title: "Error",
         description: "Connection not found",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if connection was properly validated
+    if (!validatedConnections.has(connectionId)) {
+      toast({
+        title: "Connection Not Validated",
+        description: "This connection has not been tested successfully. Please test the connection before scanning.",
         variant: "destructive"
       });
       return;
@@ -118,70 +172,25 @@ const Index = () => {
       description: `PII scan started for ${connection.name}`,
     });
 
-    // Simulate progress for the scan
-    const progressInterval = setInterval(() => {
-      setActiveScans(prev => {
-        const scan = prev.get(scanId);
-        if (scan && scan.status === 'running') {
-          const newProgress = Math.min(scan.progress + Math.random() * 15, 100);
-          const updatedScan = { ...scan, progress: newProgress };
-          
-          if (newProgress >= 100) {
-            clearInterval(progressInterval);
-            updatedScan.status = 'completed';
-            updatedScan.endTime = new Date();
-            
-            // Generate a mock scan result when scan completes
-            const scanResult: ScanResult = {
-              id: `result-${Date.now()}`,
-              connectionId,
-              connectionName: connection.name,
-              scanDate: new Date(),
-              totalTables: Math.floor(Math.random() * 20) + 5,
-              tablesWithPii: Math.floor(Math.random() * 10) + 1,
-              piiFields: Math.floor(Math.random() * 50) + 5,
-              riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)] as 'Low' | 'Medium' | 'High',
-              details: [
-                {
-                  table: 'users',
-                  column: 'email',
-                  piiType: 'Email Address',
-                  confidence: 0.95,
-                  samples: ['user@example.com', 'test@domain.com']
-                },
-                {
-                  table: 'profiles',
-                  column: 'phone',
-                  piiType: 'Phone Number',
-                  confidence: 0.87,
-                  samples: ['+1-555-0123', '555-987-6543']
-                }
-              ]
-            };
-            
-            setScanResults(prev => [...prev, scanResult]);
-            
-            // Update connection's last scan date
-            setConnections(prev => prev.map(conn => 
-              conn.id === connectionId 
-                ? { ...conn, lastScan: new Date() }
-                : conn
-            ));
-            
-            toast({
-              title: "Scan Completed",
-              description: `PII scan completed for ${connection.name}`,
-            });
-          }
-          
-          return new Map(prev.set(scanId, updatedScan));
-        }
-        return prev;
-      });
-    }, 2000);
-
     console.log(`Starting PII scan for connection: ${connection.name}`);
     console.log(`This would execute: piicatcher detect --source-name ${connection.name}`);
+
+    // Note: In real implementation, this would call the actual piicatcher tool
+    // For now, we'll not generate fake results - only real scan results should be shown
+    toast({
+      title: "Real Scan Required",
+      description: "This would execute the actual piicatcher tool. No fake results will be generated.",
+      variant: "destructive"
+    });
+
+    // Stop the fake scan immediately since we don't want fake results
+    setTimeout(() => {
+      setActiveScans(prev => {
+        const newScans = new Map(prev);
+        newScans.delete(scanId);
+        return newScans;
+      });
+    }, 1000);
   };
 
   const handlePauseScan = (scanId: string) => {

@@ -49,10 +49,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   const { toast } = useToast();
 
   const testConnection = async () => {
-    if (!formData.type || !formData.host || !formData.username) {
+    if (!formData.type || !formData.host || !formData.username || !formData.password) {
       toast({
         title: "Error",
-        description: "Please fill in required fields before testing",
+        description: "Please fill in all required fields (including password) before testing",
         variant: "destructive"
       });
       return;
@@ -114,10 +114,10 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.type || !formData.host || !formData.username) {
+    if (!formData.name || !formData.type || !formData.host || !formData.username || !formData.password) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including password",
         variant: "destructive"
       });
       return;
@@ -307,7 +307,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={testConnection}
-                    disabled={isTestingConnection || !formData.type || !formData.host || !formData.username}
+                    disabled={isTestingConnection || !formData.type || !formData.host || !formData.username || !formData.password}
                   >
                     {isTestingConnection ? (
                       <>
