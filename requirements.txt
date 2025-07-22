@@ -1,0 +1,23 @@
+# Core
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+
+# PII Detection Libraries
+spacy
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.4.0/en_core_web_sm-3.4.0.tar.gz
+stanza
+flair
+torch
+transformers
+spark-nlp==4.2.4
+pyspark==3.3.1
+
+# Data Sources
+pandas
+openpyxl
+psycopg2-binary
+mysql-connector-python
+pymongo
+
